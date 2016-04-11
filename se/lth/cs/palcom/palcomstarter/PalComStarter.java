@@ -12,6 +12,11 @@ import se.lth.cs.palcom.util.configuration.DeviceList;
 import se.lth.cs.palcom.util.configuration.DeviceList.DeviceItem;
 import se.lth.cs.palcom.logging.Logger;
 
+/** 
+ * PalCom device that acts as a monitoring device. Uses functionality in {@link UpdaterService}
+ * @author Christian Hernvall
+ *
+ */
 public class PalComStarter extends AbstractDevice {
 	private static final String VERSION = "1.0.0";
 	private static final String COM_HELP = "h";
@@ -20,21 +25,15 @@ public class PalComStarter extends AbstractDevice {
 	
 	public final static String DEVICE_TYPE = "PalComStarter";
 	public static final String COM_CONTINUE_UPDATE_STAGE_THREE = "-continue-update-stage-three";
+	
+	private static final int DEFAULT_LOG_LEVEL = Logger.LEVEL_INFO;
 
 	public PalComStarter(DeviceItem deviceItem, String version, boolean continueUpdateStageThree) {
 		super(deviceItem.getID(), deviceItem.getName(), version);
-		Logger.setLevel(Logger.LEVEL_WARNING);
-		FSServiceManager sm = new FSServiceManager(this, Thread.currentThread().getContextClassLoader());
+		Logger.setLevel(DEFAULT_LOG_LEVEL);
+		FSServiceManager sm = new FSServiceManager(this);
 		sm.enableManagerService();
-//		try {
-//			sm.start(true);
-//		} catch (IllegalArgumentException e) {
-//			e.printStackTrace();
-//		} catch (ClassNotFoundException e) {
-//			e.printStackTrace();
-//		} catch (InvocationTargetException e) {
-//			e.printStackTrace();
-//		}
+		
 		UpdaterService us = new UpdaterService(this, continueUpdateStageThree);
 		us.register();
 		us.start();
@@ -64,29 +63,29 @@ public class PalComStarter extends AbstractDevice {
 						if(f.isAbsolute()&&f.isDirectory()){
 							HostFileSystems.setDeviceRootPath(palcomFSPath);
 						} else {
-							System.err.println("Incorrect usage, -" + COM_FILE_SYSTEM + " " +palcomFSPath
-									+ " must be a valid path to an existing directory");
+							Logger.log("Incorrect usage, -" + COM_FILE_SYSTEM + " " +palcomFSPath
+									+ " must be a valid path to an existing directory", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 							printUsage();
-							System.out.println("Exiting");
+							Logger.log("Exiting", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 							System.exit(1);
 						}
 					}catch(Exception ex){
-						System.err.println("Incorrect usage, -" + COM_FILE_SYSTEM + " " +palcomFSPath
-								+ " must be a valid path to an existing directory");
+						Logger.log("Incorrect usage, -" + COM_FILE_SYSTEM + " " +palcomFSPath
+								+ " must be a valid path to an existing directory", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 						printUsage();
-						System.out.println("Exiting");
+						Logger.log("Exiting", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 						System.exit(1);
 					}
-					System.out.println(" -f using path: "+palcomFSPath);												
+					Logger.log(" -f using path: " + palcomFSPath, Logger.CMP_DEVICE, Logger.LEVEL_DEBUG);									
 				} else{
-					System.err.println("-" + COM_FILE_SYSTEM + " used without specifying a path.");
+					Logger.log("-" + COM_FILE_SYSTEM + " used without specifying a path.", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 					printUsage();
-					System.err.println("Exiting");
+					Logger.log("Exiting", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 					System.exit(1);
 				}
 			} else if (args[i].equals("-" + COM_CONTINUE_UPDATE_STAGE_THREE)) {
 				continueUpdateStageThree = true;
-				System.out.println("Will continue in stage three.");
+				Logger.log("Will continue in stage three.", Logger.CMP_DEVICE, Logger.LEVEL_DEBUG);
 			} else if (args[i].equals("-" + COM_HELP)) {
 				printUsage();
 				System.exit(0);
@@ -96,12 +95,12 @@ public class PalComStarter extends AbstractDevice {
 		DeviceItem[] configurations = null;
 		DeviceItem deviceItem = null;
 		if (deviceID == null) {
-			System.out.println("Device ID not set. Choosing the first default device configuration. Generates a new configuration if none is present.");
+			Logger.log("Device ID not set. Choosing the first default device configuration. Generates a new configuration if none is present.", Logger.CMP_DEVICE, Logger.LEVEL_INFO);
 			try {
 				configurations = DeviceList.getConfigurations(DEVICE_TYPE, true);
 			} catch (IOException ex) {
-				System.err.println("Failed to access default device ID. Cannot start device.");
-				System.err.println(ex.getMessage());
+				Logger.log("Failed to access default device ID. Cannot start device.", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
+				Logger.log(ex.getMessage(), Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 				System.exit(1);
 			}
 			deviceItem = configurations[0];
@@ -109,24 +108,20 @@ public class PalComStarter extends AbstractDevice {
 			try {
 				configurations = DeviceList.getConfigurations(DEVICE_TYPE, false);
 			} catch (IOException e) {
-				System.err.println("Failed to access default device ID. Cannot start device.");
+				Logger.log("Failed to access default device ID. Cannot start device.", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 				System.exit(1);
 			}
 			deviceItem = getDeviceItem(configurations, deviceID.getID());
 			if (deviceItem == null) {
-				System.err.println("Unable to find the configuration with id: "
-						+ deviceID.getID());
-				System.out.println("Exiting");
+				Logger.log("Unable to find the configuration with id: "
+						+ deviceID.getID(), Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
+				Logger.log("Exiting", Logger.CMP_DEVICE, Logger.LEVEL_ERROR);
 				System.exit(1);
 			}
 		}
 		
 		if (palcomFSPath == null) {
-			try {
-				System.out.println("PalCom Filesystem path not set. Will use default path: " + HostFileSystems.getGlobalRoot().getURL().replace("global", ""));
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			Logger.log("PalCom Filesystem path not set. Will use default path: " + HostFileSystems.getUnixStylePathToFilesystemRoot(), Logger.CMP_DEVICE, Logger.LEVEL_INFO);
 		}
 		
 		new PalComStarter(deviceItem, VERSION, continueUpdateStageThree).start();
@@ -141,7 +136,7 @@ public class PalComStarter extends AbstractDevice {
 		System.out
 				.println("  -"+COM_FILE_SYSTEM+" <dir-path>                           --- Start PalComStarter with PalcomFilesystem located in existing directory at <dir-path>");
 		System.out
-				.println("  -"+COM_CONTINUE_UPDATE_STAGE_THREE+"                           --- Start PalComStarter in update stage three in order to continue an ongoing updating process. This flag should only be set manually during testing. DO NOT USE UNLESS YOU KNOW WHAT IT DOES!");
+				.println("  -"+COM_CONTINUE_UPDATE_STAGE_THREE+"                      --- Start PalComStarter in update stage three in order to continue an ongoing updating process. This flag should only be set manually during testing. DO NOT USE UNLESS YOU KNOW WHAT IT DOES!");
 
 	}
 	

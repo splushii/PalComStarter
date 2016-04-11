@@ -1,16 +1,14 @@
 package se.lth.cs.palcom.updatedistributionservice;
 
 import java.util.HashMap;
-
 import ist.palcom.resource.descriptor.Command;
 import ist.palcom.resource.descriptor.DeviceID;
 import ist.palcom.resource.descriptor.PRDService;
 import ist.palcom.resource.descriptor.ServiceID;
-import ist.palcom.resource.descriptor.ServiceInstanceID;
-import se.lth.cs.palcom.communication.connection.Connection;
 import se.lth.cs.palcom.communication.connection.Readable;
 import se.lth.cs.palcom.communication.connection.Writable;
 import se.lth.cs.palcom.device.AbstractDevice;
+import se.lth.cs.palcom.logging.Logger;
 import se.lth.cs.palcom.service.AbstractSimpleService;
 import se.lth.cs.palcom.service.ServiceTools;
 import se.lth.cs.palcom.service.command.CommandServiceProtocol;
@@ -46,7 +44,7 @@ public class UpdateDistributionService extends AbstractSimpleService {
 	private static final String PARAM_VERSION_ENTRY_UNKNOWN = se.lth.cs.palcom.updaterservice.UpdaterService.PARAM_NO_ENTRY;
 	
 	private long benchmark;
-	// TODO: save updates to disk instead?
+	// TODO: save updates to disk for consistency between restarts
 	// [device folder]/updates/[implementation]/[PalCom version]/[deviceType].[suffix]
 	// for example [deviceID]/updates/java/1.2/thething.jar
 	HashMap<String, UpdateEntry> deviceTypeToJarMap;
@@ -54,8 +52,6 @@ public class UpdateDistributionService extends AbstractSimpleService {
 	// TODO: Add command to list updates
 	
 	// TODO: Add command to remove one/all updates
-	
-	// TODO: Separate command to upload update and to broadcast update.
 	
 	public UpdateDistributionService(AbstractDevice container) {
 		this(container, ServiceTools.getNextInstance(SERVICE_VERSION));
@@ -121,37 +117,37 @@ public class UpdateDistributionService extends AbstractSimpleService {
 			Writable conn = (Writable) connection;
 			if(command.getID().equals(COMMAND_IN_BROADCAST_UPDATE_SINGLE_DEVICE_TYPE)) {
 				benchmark = System.currentTimeMillis();
-				printderp("Benchmarking time to update. Current time: " + benchmark);
+				Logger.log("Benchmarking time to update. Current time: " + benchmark, Logger.CMP_SERVICE, Logger.LEVEL_BULK);
 				String deviceType = UpdaterService.toUTF8String(command.findParam(PARAM_DEVICE_TYPE).getData());
 				String version = UpdaterService.toUTF8String(command.findParam(PARAM_VERSION).getData());
 				byte[] content = command.findParam(PARAM_UPDATE_CONTENT).getData();
-				printderp("Saving update " + deviceType + "(v" + version + ") and broadcasting update info to devices.");
+				Logger.log("Saving update " + deviceType + "(v" + version + ") and broadcasting update info to devices.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				deviceTypeToJarMap.put(deviceType, new UpdateEntry(version, content.clone()));
 				announceNewUpdate(new String[] {deviceType}, new String[] {version});
 			} else if (command.getID().equals(COMMAND_IN_UPDATE_CONTENT_REQUEST)) {
 				String deviceType = UpdaterService.toUTF8String(command.findParam(PARAM_DEVICE_TYPE).getData());
 				String version = UpdaterService.toUTF8String(command.findParam(PARAM_VERSION).getData()); // TODO we are not using version
-				printderp("Replying with update content (v" + version + ") to " + deviceType + ".");
+				Logger.log("Replying with update content (v" + version + ") to " + deviceType + ".", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				replyWithJar(deviceType, conn);
 			} else if (command.getID().equals(COMMAND_IN_CHECK_UPDATE_SERVER)) {				
-				printderp("Replying to a device checking its connection to me.");
+				Logger.log("Replying to a device checking its connection to me.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				replyToConfirmRequest(conn);
 			} else if (command.getID().equals(COMMAND_IN_CHECK_LATEST_VERSION)) {
-				printderp("Replying with latest version info to device.");
+				Logger.log("Replying with latest version info to device.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				String deviceTypes = UpdaterService.toUTF8String(command.findParam(PARAM_DEVICE_TYPE).getData());
 				replyWithLatestVersion(conn, deviceTypes);
 			} else if (command.getID().equals(COMMAND_IN_BENCHMARK_END)) {
-				printderp("Got benchmark end command. Current time: " + System.currentTimeMillis());
-				printderp("Difference between start and now: " + (System.currentTimeMillis() - benchmark));
+				Logger.log("Got benchmark end command. Current time: " + System.currentTimeMillis(), Logger.CMP_SERVICE, Logger.LEVEL_BULK);
+				Logger.log("Difference between start and now: " + (System.currentTimeMillis() - benchmark), Logger.CMP_SERVICE, Logger.LEVEL_BULK);
 			} else if (command.getID().equals(COMMAND_IN_ADD_JAR)) {
 				String deviceType = UpdaterService.toUTF8String(command.findParam(PARAM_DEVICE_TYPE).getData());
 				String version = UpdaterService.toUTF8String(command.findParam(PARAM_VERSION).getData());
 				byte[] content = command.findParam(PARAM_UPDATE_CONTENT).getData();
-				printderp("Adding " + deviceType + " version " + version + " to update database.");
+				Logger.log("Adding " + deviceType + " version " + version + " to update database.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				deviceTypeToJarMap.put(deviceType, new UpdateEntry(version, content));
 			} else if (command.getID().equals(COMMAND_IN_BROADCAST_UPDATE_MULTIPLE_DEVICES)) {
 				benchmark = System.currentTimeMillis();
-				printderp("Benchmarking time to update. Current time: " + benchmark);
+				Logger.log("Benchmarking time to update. Current time: " + benchmark, Logger.CMP_SERVICE, Logger.LEVEL_BULK);
 				int size = deviceTypeToJarMap.keySet().size();
 				String[] deviceTypes = new String[size];
 				String[] versions = new String[size];
@@ -163,7 +159,7 @@ public class UpdateDistributionService extends AbstractSimpleService {
 					msg += " " + deviceType;
 					i++;
 				}
-				printderp(msg);
+				Logger.log(msg, Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				announceNewUpdate(deviceTypes, versions);
 			}
 		}
@@ -204,9 +200,9 @@ public class UpdateDistributionService extends AbstractSimpleService {
 		String version = updateEntry.version;
 		byte[] content = updateEntry.content;
 		if (content == null) {
-			printderp("Could not find jar with version " + version + " for the client.");
+			Logger.log("Could not find jar with version " + version + " for the client.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 		} else {
-			printderp("Sending " + deviceType + " " + version + " content.");
+			Logger.log("Sending " + deviceType + " " + version + " content.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			Command reply = getProtocolHandler().findCommand(COMMAND_OUT_UPDATE_DATA);
 			reply.findParam(PARAM_DEVICE_TYPE).setData(deviceType.getBytes());
 			reply.findParam(PARAM_VERSION).setData(version.getBytes());
@@ -214,14 +210,14 @@ public class UpdateDistributionService extends AbstractSimpleService {
 			try {
 				 blockingSendTo(conn, reply);
 			} catch (InterruptedException e) {
-				printderp("Could not send update data to client: SEND_ERROR");
+				Logger.log("Could not send update data to client: SEND_ERROR", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 			}
 		}
 	}
 
 	private void announceNewUpdate(String[] deviceTypes, String[] versions) {
 		if (deviceTypes.length == 0) {
-			printderp("No updates to announce. Use \"" + COMMAND_IN_ADD_JAR + "\" command to add an update.");
+			Logger.log("No updates to announce. Use \"" + COMMAND_IN_ADD_JAR + "\" command to add an update.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 			return;
 		}
 		Command cmd = getProtocolHandler().findCommand(COMMAND_OUT_UPDATE_DEVICE_TYPES);
@@ -246,10 +242,6 @@ public class UpdateDistributionService extends AbstractSimpleService {
 	public void start() {
 		setStatus(PRDService.FULLY_OPERATIONAL);
 		super.start();
-	}
-	
-	private void printderp(String msg) {
-		System.err.println("\033[32mServer: \033[0m"+ msg);
 	}
 	
 	private class UpdateEntry {

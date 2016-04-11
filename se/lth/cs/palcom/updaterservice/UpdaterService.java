@@ -40,6 +40,7 @@ import se.lth.cs.palcom.discovery.proxy.PalcomService;
 import se.lth.cs.palcom.discovery.proxy.PalcomServiceList;
 import se.lth.cs.palcom.discovery.proxy.implementors.DeviceProxy;
 import se.lth.cs.palcom.filesystem.HostFileSystems;
+import se.lth.cs.palcom.logging.Logger;
 import se.lth.cs.palcom.palcomstarter.PalComStarter;
 import se.lth.cs.palcom.service.AbstractSimpleService;
 import se.lth.cs.palcom.service.ServiceTools;
@@ -97,7 +98,6 @@ public class UpdaterService extends AbstractSimpleService {
 	private static final String NAMESPACE_MONITORED_DEVICE = "monitoredDevice-";
 	private static final String NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION = "deviceTypeVersion";
 	private static final String NAMESPACE_UPDATERSERVICE_GENERAL = "general";
-//	private static final String UPDATERSERVICE_NAMESPACE = "UpdaterService";
 
 	private static final String KEY_MONITORED_DEVICE_ID = "ID";
 	private static final String KEY_MONITORED_DEVICE_TYPE = "type";
@@ -161,7 +161,7 @@ public class UpdaterService extends AbstractSimpleService {
 				ServiceTools.getNextInstance(SERVICE_VERSION), "Updates PalCom devices",
 				new UnicastDistribution(true));
 		this.continueUpdateStageThree = continueUpdateStageThree;
-		printderp("Continue updating stage three: " + continueUpdateStageThree);
+		log("Continue updating stage three: " + continueUpdateStageThree, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		configureService();
 	}
 	
@@ -173,20 +173,7 @@ public class UpdaterService extends AbstractSimpleService {
 	}
 	
 	private void configureService() {
-//		HostFileSystems.getDeviceRoot(deviceId)
-//		DeviceList.getConfFolder(deviceType)
-		// Used as override during testing to use a TheThing as PalComStarter
-		// TODO Should not be needed in the future
-		try {
-			if(container.getDeviceRootFileSystem().getFile("IamMonitor", false).exists()) {
-				isMonitor = true;
-			} else {
-				isMonitor = false;
-			}
-		} catch (IOException e) {
-			isMonitor = false;
-		}
-		if (isMonitor || container instanceof PalComStarter) {
+		if (container instanceof PalComStarter) {
 			isMonitor = true;
 			try {
 				monitoringProperties = new DeviceProperties(new DeviceID("monitoring"), HostFileSystems.getGlobalRoot(), null, "Monitoring properties. Generated " + new Date());
@@ -194,47 +181,47 @@ public class UpdaterService extends AbstractSimpleService {
 				monitor = new MonitoringThread();
 				for (String deviceName: monitoredDeviceNames) {
 					if (!monitoringProperties.getProperty(NAMESPACE_UPDATERSERVICE_MONITORED_DEVICE_NAMES, deviceName).equals(PROPERTY_MONITORED_DEVICE_ENABLED)){
-						// Do not load the device info if it is not set as enabled
 						continue;
 					}
 					String deviceSpecificNamespace = NAMESPACE_MONITORED_DEVICE + deviceName;
 					String monitoredDeviceID = monitoringProperties.getProperty(deviceSpecificNamespace, KEY_MONITORED_DEVICE_ID);
 					String monitoredDeviceType = monitoringProperties.getProperty(deviceSpecificNamespace, KEY_MONITORED_DEVICE_TYPE);
 					if (monitoredDeviceType == null) {
-						printderp("ERROR: Device type is not specified in the configuration: " + deviceSpecificNamespace + "@" + KEY_MONITORED_DEVICE_TYPE);
-						printderp("Will not monitor device with name: " + deviceName);
+						log("ERROR: Device type is not specified in the configuration: " + deviceSpecificNamespace + "@" + KEY_MONITORED_DEVICE_TYPE, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
+						log("Will not monitor device with name: " + deviceName, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 						continue;
 					}
 					String monitoredDeviceVersion = monitoringProperties.getProperty(NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION, monitoredDeviceType);
 					if (monitoredDeviceVersion == null) {
-						printderp("ERROR: Device version is not specified in the configuration: " + deviceSpecificNamespace + "@" + KEY_MONITORED_DEVICE_TYPE);
-						printderp("Will not monitor device with name: " + deviceName);
+						log("ERROR: Device version is not specified in the configuration: " + deviceSpecificNamespace + "@" + KEY_MONITORED_DEVICE_TYPE, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
+						log("Will not monitor device with name: " + deviceName, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 						continue;
 					}
 					if (monitoredDeviceID == null) {
 						//TODO Generate a new device if it is missing its device ID
-						printderp("ERROR: Device ID is not specified in the configuration: " + deviceSpecificNamespace + "@" + KEY_MONITORED_DEVICE_TYPE);
-						printderp("Will not monitor device with name: " + deviceName);
+						log("ERROR: Device ID is not specified in the configuration: " + deviceSpecificNamespace + "@" + KEY_MONITORED_DEVICE_TYPE, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
+						log("Will not monitor device with name: " + deviceName, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 						continue;
 					}
 					monitor.addNewMonitoredDevice(monitoredDeviceID, deviceName, monitoredDeviceType, monitoredDeviceVersion);
 				}
 				updateServerDeviceID = monitoringProperties.getProperty(NAMESPACE_UPDATERSERVICE_GENERAL, KEY_UPDATE_SERVER_DEVICE_ID);
 				if (updateServerDeviceID == null) {
-					printderp("UpdateServer device ID is not set in configuration: " + NAMESPACE_UPDATERSERVICE_GENERAL + "@" + KEY_UPDATE_SERVER_DEVICE_ID);;
-					printderp("Will not be able to communicate with or receive updates from Update Server.");
+					log("UpdateServer device ID is not set in configuration: " + NAMESPACE_UPDATERSERVICE_GENERAL + "@" + KEY_UPDATE_SERVER_DEVICE_ID, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
+					log("Will not be able to communicate with or receive updates from Update Server.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				}
 				socketListener = new SocketListenerThread(this, PALCOMSTARTER_SOCKET_PORT);
 				socketSender = new SocketSender(this, MONITORED_DEVICE_SOCKET_PORT);
 				updateServerConnectionListener = new UpdateServerConnectionListener();
 			} catch (IOException e) {
+				log("Could not access monitoring.properties. UpdateServer and monitored devices unknown. Reason: ", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				e.printStackTrace();
 			}
-		} 
-		if (!isMonitor) { // This means that this service is running on a monitored device, not a PalComStarter. Reverse the ports.
+		} else { // This means that this service is running on a monitored device, not a PalComStarter. Reverse the ports.
 			socketListener = new SocketListenerThread(this, MONITORED_DEVICE_SOCKET_PORT);
 			socketSender = new SocketSender(this, PALCOMSTARTER_SOCKET_PORT);			
 		}
+		
 		commandBuffer = new LinkedBlockingQueue<Command>();
 
 		CommandServiceProtocol sp = getProtocolHandler();
@@ -328,22 +315,19 @@ public class UpdaterService extends AbstractSimpleService {
 	
 	public void start() {
 		socketListener.start();
-//		socketSender.start();
 		if (isMonitor) {
-			printderp("I am a monitor");
+			log("UpdaterService is running as a monitoring device / PalComStarter.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			new PalComStarterStartThread().start();
 		} else {
-			printderp("I HAVE NO CHILDREN TO MONITOR! GAHHAH! I AM NO MONITOR");
+			log("UpdaterService is running as a monitored device.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			new MonitoredDeviceStartThread().start();
-			// wait to set as fully operational until socket is tested (done in DeviceStart Thread)
 		}
 	}
 	
 	private void stopDevice() {
-		printderp("Stopping device.");
+		log("Stopping device.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 		stopUpdaterService();
-//		container.stop(); // Throwing errors. Better way to stop the device?
-		System.exit(0); // needed? container.stop() doesn't kill theThing completely so this will do for now.
+		System.exit(0);
 	}
 	
 	private void stopUpdaterService() {
@@ -411,22 +395,22 @@ public class UpdaterService extends AbstractSimpleService {
 			case NONE:
 				if (isMonitor) {
 					if (command.getID().equals(COMMAND_IN_UPDATE_DEVICE_TYPES)) {
-						// We are now in the updating state. Commands that could interrupt the procedure are blocked (ignored)
 						updateState = UpdateState.UPDATING_INITIAL;
-						printderp("Got new update from UpdateServer");
+						// We are now in the updating state. Commands that could interrupt the procedure are ignored
+						log("Got new update from UpdateServer", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 						String deviceTypes = toUTF8String(command.findParam(PARAM_DEVICE_TYPE).getData());
 						String newVersions = toUTF8String(command.findParam(PARAM_VERSION).getData());
 						if (deviceTypes == null) {
-							printderp("Device types is null. Will not update.");
+							log("Device types is null. Will not update.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						} else if (newVersions == null) {
-							printderp("Versions is null. Will not update.");
+							log("Versions is null. Will not update.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						} else {
 							String[] splitDeviceTypes = deviceTypes.split(PARAM_VALUE_SEPARATOR);
 							String[] splitNewVersions = newVersions.split(PARAM_VALUE_SEPARATOR);
 							if (splitDeviceTypes.length < 1) {
-								printderp("There are no device types. Will not update.");
+								log("There are no device types. Will not update.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 							} else if (splitNewVersions.length < 1) {
-								printderp("There are no versions. Will not update.");
+								log("There are no versions. Will not update.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 							} else {
 								new UpdateStageOneThread((Writable) conn, splitDeviceTypes, splitNewVersions).start();														
 							}
@@ -454,9 +438,9 @@ public class UpdaterService extends AbstractSimpleService {
 					} else if (command.getID().equals(COMMAND_IN_RESET_UPDATE_ABORTED_COUNTER)) {
 						updateAborted = 0;
 						monitoringProperties.getProperty(NAMESPACE_UPDATERSERVICE_GENERAL, KEY_UPDATE_ABORTED);
-						printderp("Update Aborted counter reset.");
+						log("\"Update Aborted\"-counter reset.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					} else {
-						printderp("Received unknown command: " + command.getID());
+						log("Received unknown command: " + command.getID(), Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 					}
 				} else { // is not monitor
 					if (command.getID().equals(COMMAND_IN_INITIATE_STAGE_TWO)) {
@@ -464,7 +448,7 @@ public class UpdaterService extends AbstractSimpleService {
 						socketListener.reopenSocket();
 						new UpdateStageTwoThread().start();
 					} else {
-						printderp("Received unknown command: " + command.getID());
+						log("Received unknown command: " + command.getID(), Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					}				
 				}
 				break;
@@ -487,6 +471,7 @@ public class UpdaterService extends AbstractSimpleService {
 				// dont get any message
 				break;
 			default:
+				Logger.log("We got a command (" + command.getID() + ") in an unknown state (" + updateState + ").", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				break;
 			}
 		}
@@ -496,7 +481,7 @@ public class UpdaterService extends AbstractSimpleService {
 		try {
 			commandBuffer.put(command);
 		} catch (InterruptedException e) {
-			e.printStackTrace();
+			Logger.log("Could not add command (" + command.getID() + ") to commandBuffer.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 		}
 	}
 
@@ -509,7 +494,7 @@ public class UpdaterService extends AbstractSimpleService {
 					return cmd;
 				}
 			} catch (InterruptedException e) {
-				e.printStackTrace();
+				Logger.log("Could not take command (" + cmdID + ") from commandBuffer.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 			}
 		}
 	}
@@ -536,48 +521,6 @@ public class UpdaterService extends AbstractSimpleService {
 		}
 	}
 
-	private boolean copyCurrentFilesystem(String currentBaseURL, String newBaseURL) {
-		try {
-			File currentFS = new File(currentBaseURL + "/PalcomFilesystem");
-			File newFS = new File(newBaseURL + "/PalcomFilesystem");
-			RecursiveDirHandler recursiveDirHandler = new RecursiveDirHandler(currentFS.toPath(), newFS.toPath());
-			if(newFS.exists()) {
-				printderp("New PalCom filesystem already exists. Deleting it first: " + newFS);
-				recursiveDirHandler.changeAction(RecursiveDirHandler.DELETE);
-				Files.walkFileTree(newFS.toPath(), recursiveDirHandler);
-			}
-			newFS.mkdirs();
-			newFS.delete();
-			if (currentFS.exists() && currentFS.isDirectory()) {
-				recursiveDirHandler.changeAction(RecursiveDirHandler.COPY);
-				printderp("Copying device configuration (PalCom filesystem) from/to:\n" + currentFS + " /\n" + newFS);
-				Files.walkFileTree(currentFS.toPath(), recursiveDirHandler);
-			} else {
-				printderp("Current filesystem not found at:" + currentFS);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-			return false;
-		}
-		return true;
-	}
-	
-	private boolean deleteFilesystem(String baseURL, boolean deleteOnJVMExit) {
-		File FS = new File(baseURL + "/PalcomFilesystem");
-		RecursiveDirHandler recursiveDirHandler;
-		if (deleteOnJVMExit) {
-			recursiveDirHandler = new RecursiveDirHandler(RecursiveDirHandler.DELETE_ON_EXIT);			
-		} else {
-			recursiveDirHandler = new RecursiveDirHandler(RecursiveDirHandler.DELETE);
-		}
-		try {
-			Files.walkFileTree(FS.toPath(), recursiveDirHandler);
-		} catch (IOException e) {
-			return false;
-		}
-		return true;
-	}
-
 	private boolean saveJar(byte[] content, String jarPath) {
 		File jarFile = new File(jarPath);
 		if (jarFile.exists()) {
@@ -590,35 +533,11 @@ public class UpdaterService extends AbstractSimpleService {
 			os.flush();
 			os.close();			
 		} catch (IOException e) {
-			printderp("Could not save jar: " + jarPath);
+			log("Could not save jar: " + jarPath, Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 			return false;
 		}
 		return true;
-		// File is not DEX'd. Is it necessary?
 	}
-
-	public void printderp(String msg) {
-		String print;
-		DeviceProperties dp;
-		try {
-			dp = new DeviceProperties(new DeviceID("monitoring"), HostFileSystems.getGlobalRoot(), null, "Monitoring properties. Generated " + new Date());
-			if (isMonitor) {
-				print = "\033[31m" + container.getName() + "(" + dp.getProperty(NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION, PALCOMSTARTER_DEVICE_TYPE) + ")";
-			} else {
-				print = "\033[32m" + container.getName() + "(" + dp.getProperty(NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION, "TheThing") + ")";
-			}
-		} catch (IOException e) {
-			if (isMonitor) {
-					print = "\033[31m" + container.getName();
-				} else {
-					print = "\033[32m" + container.getName();
-				}
-		}
-		
-		System.err.println(print + ": \033[0m" + msg);
-	}
-	
-
 
 	// +----------------------------------------------------------------------------------------------+
 	// |                          MonitoredDeviceStart Thread                                                  |
@@ -631,7 +550,7 @@ public class UpdaterService extends AbstractSimpleService {
 	private class MonitoredDeviceStartThread extends Thread {
 		@Override
 		public void run(){
-			printderp("MonitoredDeviceStart Thread started");
+			log("MonitoredDeviceStart Thread started. Performing startup check...", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			updateState = UpdateState.STARTUP;
 			while (true) {
 				String msg = socketListener.getMsg();
@@ -645,21 +564,21 @@ public class UpdaterService extends AbstractSimpleService {
 
 					// request response from update server in order to test Palcom tunnel/communication
 					Command confirmRequestCmd = getProtocolHandler().findCommand(COMMAND_OUT_CHECK_UPDATE_SERVER);
-					printderp("Sending confirmation request to update server");
+					log("Sending confirmation request to update server", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					sendTo(writableConnToUpdateServer, confirmRequestCmd);
 					
 					// wait for response from server
-					printderp("Waiting for confirmation from update server.");
+					log("Waiting for confirmation from update server.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					getCommandFromBuffer(COMMAND_IN_CHECK_UPDATE_SERVER_CONFIRM);
 					
-					printderp("Got response from update server!");
+					log("Got response from update server!", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					socketSender.sendMsg(UPDATE_PROTOCOL_CHECK_UPDATE_SERVER_CONFIRM, SocketSender.TRY_FOREVER);
 				} else if (msg.equals(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK)) {
 					socketListener.closeSocket();
 					// Send ACK when socketListeners socket is closed. Otherwise it will block the
 					// port for next monitored device.
 					socketSender.sendMsg(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK_ACK, SocketSender.TRY_FOREVER);
-					printderp("DeviceStartThread startup check finished.");
+					log("MonitoredDeviceStart Thread startup check finished.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 					updateState = UpdateState.NONE;
 					break;
 				} else if (msg.equals(UPDATE_PROTOCOL_STAGE_TWO)) {
@@ -668,7 +587,7 @@ public class UpdaterService extends AbstractSimpleService {
 					break;
 				}
 			}
-			printderp("MonitoredDeviceStart Thread done. Thread killed.");
+			log("MonitoredDeviceStart Thread done. Thread killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		}
 	}
 	
@@ -683,7 +602,7 @@ public class UpdaterService extends AbstractSimpleService {
 	private class PalComStarterStartThread extends Thread {
 		@Override
 		public void run() {
-			printderp("PalComStarter Start Thread started.");
+			log("PalComStarter Start Thread started.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			setAsFullyOperational();
 			if (continueUpdateStageThree) {
 				// We are in the middle of an update. Let's carry on with it!
@@ -695,18 +614,18 @@ public class UpdaterService extends AbstractSimpleService {
 						updateStageThreeThread.join();
 						break;
 					} catch (InterruptedException e) {
-						printderp("Got interrupted while waiting for UpdateStageThree Thread. Things will go BAD if we continue so I will try to join again...");
+						log("Got interrupted while waiting for UpdateStageThree Thread. Things will go BAD if we continue so I will try to join again...", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 					}
 				}
 			}
 			updateState = UpdateState.NONE;
 			updateServerConnectionListener.addUpdateServerListener();
-			// startup update check
+			// Startup update check
 			String tmp = monitoringProperties.getProperty(NAMESPACE_UPDATERSERVICE_GENERAL, KEY_UPDATE_ABORTED);
 			if (tmp != null) { // then update was aborted last time so we need to remember it
 				updateAborted = Integer.valueOf(tmp);
-				printderp("Update was just aborted (total " + updateAborted + " times)");
-				printderp("Will wait " + UPDATE_ABORTED_DELAY_SECONDS + " seconds before trying to update again.");
+				log("Update was just aborted (total " + updateAborted + " times)", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
+				log("Will wait " + UPDATE_ABORTED_DELAY_SECONDS + " seconds before trying to update again.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				updateAbortedDelay = System.currentTimeMillis() + UPDATE_ABORTED_DELAY_SECONDS*1000;
 				Timer t = new Timer();
 				t.schedule(new TimerTask() {
@@ -718,11 +637,9 @@ public class UpdaterService extends AbstractSimpleService {
 			} else {
 				updateServerConnectionListener.checkLatestVersion();
 			}
-		
-
 			monitor.start();
-			
-			printderp("PalComStarter Start Thread done. Thread killed.");
+			log("PalComStarter startup check complete.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
+			log("PalComStarter Start Thread done. Thread killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		}
 	}
 	
@@ -744,7 +661,7 @@ public class UpdaterService extends AbstractSimpleService {
 	// +----------------------------------------------------------------------------------------------+
 	/**
 	 * Thread started when the monitored devices should be updated. Goes through the updating process
-	 * and changes updatestates.
+	 * and changes update states.
 	 */
 	
 	private class UpdateStageOneThread extends Thread {
@@ -769,10 +686,10 @@ public class UpdaterService extends AbstractSimpleService {
 
 		@Override
 		public void run() {
-			printderp("UpdateStageOne Thread started.");		
+			log("UpdateStageOne Thread started.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);		
 			// Preparing and setting some variables needed later in the process and in case of emergency abort
 			if (!stageOnePreparations()) {
-				printderp("No update will be performed.");
+				log("No update will be performed.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				updateState = UpdateState.NONE;
 				return;
 			}
@@ -789,20 +706,15 @@ public class UpdaterService extends AbstractSimpleService {
 		private boolean stageOnePreparations() {
 			// Check if we recently tried to update and failed
 			if (updateAborted > 0 && updateAbortedDelay > System.currentTimeMillis()) {
-				printderp("Recently tried to update (" + updateAborted +" times) and failed. Updating disabled for " + (updateAbortedDelay - System.currentTimeMillis())/1000 + "s.");
+				log("Recently tried to update (" + updateAborted +" times) and failed. Updating disabled for " + (updateAbortedDelay - System.currentTimeMillis())/1000 + "s.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				return false;
 			}
 			if (updateAborted >= MAX_TIMES_TO_RETRY_UPDATE) {
-				printderp("Tried to update " + MAX_TIMES_TO_RETRY_UPDATE + " times before. Will not try again.");
+				log("Tried to update " + MAX_TIMES_TO_RETRY_UPDATE + " times before. Will not try again.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				// TODO: Let the UpdateServer know that we failed many times and won't try again?
 				return false;
 			}
-			try {
-				pathToFS = HostFileSystems.getGlobalRoot().getURL().replace("/PalcomFilesystem/global", "").replace("file:", "");
-			} catch (IOException e1) {
-				printderp("Could not get path to PalcomFilesystem. Can not perform update.");
-				return false;
-			}
+			pathToFS = HostFileSystems.getUnixStylePathToFilesystemRoot().replace("/PalcomFilesystem","");
 			// Check what type of updates we are to perform
 			performMonitoredDeviceUpdate = false;
 			performPalComStarterUpdate = false;
@@ -825,16 +737,16 @@ public class UpdaterService extends AbstractSimpleService {
 						
 						break;
 					case IDENTICAL_VERSION:							
-						printderp("Our current version of " + deviceType + " (" + currentVersion + ") does not differ from UpdateServer's version (" + newVersion + ").");
-						printderp("Will not update " + deviceType + ".");
+						log("Our current version of " + deviceType + " (" + currentVersion + ") does not differ from UpdateServer's version (" + newVersion + ").", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
+						log("Will not update " + deviceType + ".", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 						continue;
 					case DOWNGRADE:
-						printderp("Our current version of " + deviceType + " (" + currentVersion + ") is greater than the UpdateServer's version (" + newVersion + ").");
-						printderp("Will not update " + deviceType + ".");
+						log("Our current version of " + deviceType + " (" + currentVersion + ") is greater than the UpdateServer's version (" + newVersion + ").", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
+						log("Will not update " + deviceType + ".", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 						continue;
 					case INCOMPATIBLE_VERSION_SCHEME:
-						printderp("The version schemes are incompatible. Local version of " + deviceType + " (" + currentVersion + ") is not comparable with UpdateServer's version (" + newVersion + ").");
-						printderp("Will not update " + deviceType + ".");
+						log("The version schemes are incompatible. Local version of " + deviceType + " (" + currentVersion + ") is not comparable with UpdateServer's version (" + newVersion + ").", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
+						log("Will not update " + deviceType + ".", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 						continue;
 					default:
 						continue;
@@ -847,12 +759,12 @@ public class UpdaterService extends AbstractSimpleService {
 					updateContentRequest.findParam(PARAM_VERSION).setData(newVersion.getBytes());
 					sendTo(conn, getProtocolHandler().findCommand(COMMAND_OUT_BENCHMARK_END));
 					sendTo(conn, updateContentRequest);
-					printderp("Waiting for update data from Update Server...");
+					log("Waiting for update data from Update Server...", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					Command command = getCommandFromBuffer(COMMAND_IN_UPDATE_DATA, MAX_SECONDS_WAIT_FOR_DATA);
 					if (command == null || command.getID().equals(COMMAND_IN_ABORT_UPDATE)){
 //						abortUpdateStageOne("Timeout when waiting for update data to " + deviceType + " " + newVersion + ". Aborting update!");
 //						return;
-						printderp("Timeout when waiting for update data to " + deviceType + " " + newVersion + ". Will not update " + deviceType + "!");
+						log("Timeout when waiting for update data to " + deviceType + " " + newVersion + ". Will not update " + deviceType + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						continue;
 					}
 					sendTo(conn, getProtocolHandler().findCommand(COMMAND_OUT_BENCHMARK_END));
@@ -862,14 +774,14 @@ public class UpdaterService extends AbstractSimpleService {
 					String receivedDeviceType = toUTF8String(pDeviceType.getData());
 					Param pVersion = command.findParam(PARAM_VERSION);
 					String receivedVersion = toUTF8String(pVersion.getData());
-					printderp("Received update to " + receivedDeviceType + " with version " + receivedVersion);
+					log("Received update to " + receivedDeviceType + " with version " + receivedVersion, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					
 					// Check to see if it matches what we requested
 					if (!deviceType.equals(receivedDeviceType) || !newVersion.equals(receivedVersion)) {
-						printderp("Expected device type or version did not match received "
+						log("Expected device type or version did not match received "
 								+ "device type or version from UpdateServer. Will not update " + deviceType + "!\n"
 								+ "Expected: " + deviceType + " version " + newVersion + "\n"
-								+ "Received: " + receivedDeviceType + " version " + receivedVersion);
+								+ "Received: " + receivedDeviceType + " version " + receivedVersion, Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						continue;
 					}
 					
@@ -881,17 +793,17 @@ public class UpdaterService extends AbstractSimpleService {
 						newExecPath = DeviceList.getConfFolder(deviceType).getNativeURL().replace("file:", "")
 								+ "/" + deviceType + "-" + newVersion + ".jar";
 					} catch (IOException e1) {
-						printderp("Could not access global configuration folder for " + deviceType + ". Will not update " + deviceType + "!");
+						log("Could not access global configuration folder for " + deviceType + ". Will not update " + deviceType + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						continue;
 					}
 					if (!saveJar(content, newExecPath)) {
-						printderp("Could not save jar: " + newExecPath + ". Will not update " + deviceType + "!");
+						log("Could not save jar: " + newExecPath + ". Will not update " + deviceType + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						new File(newExecPath).delete();
 						continue;
 					}
-					printderp("New executable for " + deviceType + " saved to: " + newExecPath);
+					log("New executable for " + deviceType + " saved to: " + newExecPath, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					
-					printderp("We will be updating " + deviceType + " from version (" + currentVersion + ") to version (" + newVersion + ").");
+					log("We will be updating " + deviceType + " from version (" + currentVersion + ") to version (" + newVersion + ").", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 					if (deviceType.equals(PALCOMSTARTER_DEVICE_TYPE)) {
 						performPalComStarterUpdate = true;
 						palComStarterUpdateDescription = new UpdateDescription(deviceType, newVersion, updateType, newExecPath);
@@ -900,7 +812,7 @@ public class UpdaterService extends AbstractSimpleService {
 						monitoredDeviceTypesToUpdate.add(new UpdateDescription(deviceType, newVersion, updateType, newExecPath));
 					}
 				} else {
-					printderp("Update's device type " + deviceType + " does not match any of our monitored devices");
+					log("Update's device type " + deviceType + " does not match any of our monitored devices", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				}
 			}
 			if (performMonitoredDeviceUpdate || performPalComStarterUpdate || performMajorUpdate)
@@ -927,7 +839,7 @@ public class UpdaterService extends AbstractSimpleService {
 					monitor.killMonitoredDevice(d, true);
 					// Check that socket is working
 					if(!monitor.startNewVersionMonitoredDevice(d, ud.version)) {
-						printderp("Could not start " + d.deviceType + " " + d.deviceID + " " + ud.version + ". Will not update " + d.deviceID + "!");
+						log("Could not start " + d.deviceType + " " + d.deviceID + " " + ud.version + ". Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						performMajorUpdate = false;
 						// Should be like this instead
 //						if (performMajorUpdate) {
@@ -938,7 +850,7 @@ public class UpdaterService extends AbstractSimpleService {
 						continue;
 					}
 					if (!socketSender.sendMsg(UPDATE_PROTOCOL_CHECK_SOCKET, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-						printderp("Socket check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!");
+						log("Socket check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						monitor.killMonitoredDevice(d, false);
 						performMajorUpdate = true;
 						continue;
@@ -949,7 +861,7 @@ public class UpdaterService extends AbstractSimpleService {
 					
 					String tmpMsg = socketListener.waitForMsg(UPDATE_PROTOCOL_CHECK_SOCKET_CONFIRM, MAX_SECONDS_WAIT_FOR_DEVICE);
 					if (tmpMsg == null || tmpMsg.equals(UPDATE_PROTOCOL_ABORT)) {
-						printderp("Socket check timeout: No socket reply from new device. Will not update " + d.deviceID + "!");
+						log("Socket check timeout: No socket reply from new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						monitor.killMonitoredDevice(d, false);
 						performMajorUpdate = true;
 						continue;
@@ -958,20 +870,20 @@ public class UpdaterService extends AbstractSimpleService {
 					// Check that device can talk to update server
 					updateState = UpdateState.UPDATING_FALLBACK_TIMER_CHECK_UPDATE_SERVER;
 					if (!socketSender.sendMsg(UPDATE_PROTOCOL_CHECK_UPDATE_SERVER, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-						printderp("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!");
+						log("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						monitor.killMonitoredDevice(d, false);
 						performMajorUpdate = true;
 						continue;
 					}
 					if (!socketSender.sendMsg(updateServerDeviceID, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-						printderp("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!");
+						log("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						monitor.killMonitoredDevice(d, false);
 						performMajorUpdate = true;
 						continue;
 					}
 					tmpMsg = socketListener.waitForMsg(UPDATE_PROTOCOL_CHECK_UPDATE_SERVER_CONFIRM, MAX_SECONDS_WAIT_FOR_DEVICE);
 					if (tmpMsg == null  || tmpMsg.equals(UPDATE_PROTOCOL_ABORT)) {
-						printderp("Update Server check timeout: No socket reply from new device. Will not update " + d.deviceID + "!");
+						log("Update Server check timeout: No socket reply from new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 						monitor.killMonitoredDevice(d, false);
 						performMajorUpdate = true;
 						continue;
@@ -979,14 +891,14 @@ public class UpdaterService extends AbstractSimpleService {
 					// Do this for all but the last monitored device. Hold on to the last one a bit longer.
 					if (monitoredDeviceTypesToUpdate.indexOf(ud) != (monitoredDeviceTypesToUpdate.size() - 1) || md.indexOf(d) != (md.size() - 1)) {
 						if (!socketSender.sendMsg(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-							printderp("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!");
+							log("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 							monitor.killMonitoredDevice(d, false);
 							performMajorUpdate = true;
 							continue;
 						}
 						tmpMsg = socketListener.waitForMsg(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK_ACK, MAX_SECONDS_WAIT_FOR_DEVICE);
 						if (tmpMsg == null  || tmpMsg.equals(UPDATE_PROTOCOL_ABORT)) {
-							printderp("Update Server check timeout: No socket reply from new device. Will not update " + d.deviceID + "!");
+							log("Update Server check timeout: No socket reply from new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 							monitor.killMonitoredDevice(d, false);
 							performMajorUpdate = true;
 							continue;
@@ -994,7 +906,7 @@ public class UpdaterService extends AbstractSimpleService {
 					}
 				}
 				// All monitored devices with deviceType are working, so we update the current version of deviceType
-				printderp("Successfully updated " + ud.deviceType + " to version " + ud.version);
+				log("Successfully updated " + ud.deviceType + " to version " + ud.version, Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				monitor.setCurrentDeviceTypeVersion(ud.deviceType, ud.version);
 				monitoringProperties.setProperty(NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION, ud.deviceType, ud.version);
 			}
@@ -1003,7 +915,7 @@ public class UpdaterService extends AbstractSimpleService {
 			// Otherwise, we need it later for stage two.
 			if (performMonitoredDeviceUpdate && !performPalComStarterUpdate) {
 				if (!socketSender.sendMsg(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-					printderp("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!");
+					log("Update Server check timeout: Could not send msg to new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 					monitor.killMonitoredDevice(d, false);
 					performMajorUpdate = false;
 					updateState = UpdateState.NONE;
@@ -1011,40 +923,41 @@ public class UpdaterService extends AbstractSimpleService {
 				}
 				String tmpMsg = socketListener.waitForMsg(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK_ACK, MAX_SECONDS_WAIT_FOR_DEVICE);
 				if (tmpMsg == null  || tmpMsg.equals(UPDATE_PROTOCOL_ABORT)) {
-					printderp("Update Server check timeout: No socket reply from new device. Will not update " + d.deviceID + "!");
+					log("Update Server check timeout: No socket reply from new device. Will not update " + d.deviceID + "!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 					monitor.killMonitoredDevice(d, false);
 					performMajorUpdate = false;
 					updateState = UpdateState.NONE;
 					return;
 				}
 //				sendTo(conn, getProtocolHandler().findCommand(COMMAND_OUT_BENCHMARK_END)); // benchmark monitored devices
-				printderp("Updating process finished.");
+				log("Updating process finished.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				monitor.enable();
 				updateState = UpdateState.NONE;
 				return;
 			}
 			
-			printderp("We are about to update PalComStarter. Time for update stage two.");
+			log("We are about to update PalComStarter. Time for update stage two.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
+			
 			if (!performMonitoredDeviceUpdate) { // If we did not perform update on some monitored device, 
 												 // we need to initiate stage two by palcom messages.
 				// It is always possible to communicate with PalCom messages in this case, because monitored 
 				// devices need to be updated in the event of a major update.
 				d = monitor.initiateStageTwo();
 				if (d == null) {
-					printderp("Could not get hold of a monitored device to initiate stage two with. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".");
+					log("Could not get hold of a monitored device to initiate stage two with. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 					performMajorUpdate = false;
 					return;
 				}
 			} else { // ... else, we initiate stage two by Update Protocol messages
 				if (!socketSender.sendMsg(UPDATE_PROTOCOL_STAGE_TWO, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-					printderp("Socket timeout: Could not send msg to new device. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".");
+					log("Socket timeout: Could not send msg to new device. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 					performMajorUpdate = false;
 					return;
 				}
 			}
 			// Send version of new PalComStarter (used to update startup script in stage three)
 			if (!socketSender.sendMsg(palComStarterUpdateDescription.version, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-				printderp("Socket timeout: Could not send msg to new device. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".");
+				log("Socket timeout: Could not send msg to new device. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				performMajorUpdate = false;
 				return;
 			}
@@ -1052,16 +965,15 @@ public class UpdaterService extends AbstractSimpleService {
 			String myJarPath = palComStarterUpdateDescription.pathToExec;
 			String myDeviceID = container.getDeviceID().getID();
 			String newStartCmd = "java -jar " + myJarPath + " -x " + myDeviceID + " -f " + pathToFS;
-			// And add the flag telling PalComStarter to continue with stage three when starting:
+			// Add the flag telling PalComStarter to continue with stage three when starting:
 			newStartCmd += " -" + PalComStarter.COM_CONTINUE_UPDATE_STAGE_THREE;
 			if (!socketSender.sendMsg(newStartCmd, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-				printderp("Socket timeout: Could not send msg to new device. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".");
+				log("Socket timeout: Could not send msg to new device. Will not update " + PALCOMSTARTER_DEVICE_TYPE + ".", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				performMajorUpdate = false;
 				return;
 			}
 			
-			
-			// TODO we should send Process objects so that new version of PalComStarter gets them
+			// TODO we should send Process objects so that the new version of PalComStarter can directly kill a process.
 			
 			// Wait for killing blow...
 			String tmpMsg = socketListener.waitForMsg(UPDATE_PROTOCOL_KILL, MAX_SECONDS_WAIT_FOR_DEVICE);
@@ -1069,30 +981,30 @@ public class UpdaterService extends AbstractSimpleService {
 				abortUpdateStageOne("Socket timeout: No kill reply from new device. Aborting update!");
 				return;
 			}
-			// make sure that we wont be disturbed and that the listening socket is closed before moving on
+			// Make sure that we wont be disturbed and that the listening socket is closed before moving on
 			updateState = UpdateState.UPDATING_DONT_DISTURB;
 			socketListener.closeSocket();
 			if (!socketSender.sendMsg(UPDATE_PROTOCOL_KILL_ACK, MAX_SECONDS_WAIT_FOR_DEVICE)) {
 				abortUpdateStageOne("Socket timeout: Kill ack not received by new device. Aborting update!");
 			}
-			printderp("UpdateStageOne Thread done. Thread killed.");
+			log("UpdateStageOne Thread done. Thread killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			stopDevice();
 		}
 		
 		public void abortUpdateStageOne(String message) { // TODO
-			printderp(message);
-			// kill any device running new version
+			log(message, Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
+			// Kill any device running new version
 			
-			// reopen socket if it is closed
+			// Reopen socket if it is closed
 			
-			// delete jars
+			// Delete jars
 			
 			// updateAborted++;
 			
 			updateState = UpdateState.NONE;
 			monitor.enable();
 			
-			// restart current version monitored devices if offline
+			// Restart current version monitored devices if offline
 		}
 		
 		private int getUpdateVersionType(String currentVersion, String newVersion) {
@@ -1141,10 +1053,10 @@ public class UpdaterService extends AbstractSimpleService {
 		
 		@Override
 		public void run() {
-			printderp("Starting UpdateStageTwo Thread");
+			log("Starting UpdateStageTwo Thread", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			// Setting some variables needed later in the process and in case of emergency abort			
 			if(!stageTwoPreparations()) {
-				printderp("Will not be able to perform stage two. Aborting update!");
+				log("Will not be able to perform stage two. Aborting update!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return;
 			}
 
@@ -1160,7 +1072,7 @@ public class UpdaterService extends AbstractSimpleService {
 			try {
 				currentPalComStarterCommand = toUTF8String(HostFileSystems.getGlobalRoot().getFile("startupscript").getContents());
 			} catch (IOException e) {
-				printderp("Could not access startup script.");
+				log("Could not access startup script.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			}
 			
@@ -1184,11 +1096,11 @@ public class UpdaterService extends AbstractSimpleService {
 			String debug = "Going to start new version PalComStarter with:";
 			for(String s: arguments)
 				debug += " " + s;
-			printderp(debug);
+			log(debug, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			ProcessBuilder pb = new ProcessBuilder(arguments);
 			pb.inheritIO();
 			try {
-				printderp("Starting new PalComStarter...");
+				log("Starting new PalComStarter...", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				p = pb.start();
 			} catch (IOException e) {
 				abortUpdateStageTwo("Could not start new PalcomStarter. Aborting update!");
@@ -1213,7 +1125,7 @@ public class UpdaterService extends AbstractSimpleService {
 			if (tmpMsg == null || tmpMsg.equals(UPDATE_PROTOCOL_ABORT)) {
 				abortUpdateStageTwo("Update Server check timeout: No socket reply from new device. Aborting update!");
 			}
-			printderp("PalcomStarter can communicate.");
+			log("PalcomStarter can communicate.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			
 			// PalcomStarter can communicate both by socket and to update server. Time to finish!
 			
@@ -1232,12 +1144,12 @@ public class UpdaterService extends AbstractSimpleService {
 				abortUpdateStageTwo("Socket timeout: Kill ack not received by new device. Aborting update!");
 			}
 			
-			printderp("UpdateStageTwo Thread is done.");
+			log("UpdateStageTwo Thread is done.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			updateState = UpdateState.NONE;
 		}
 		
 		public void abortUpdateStageTwo(String message) { // TODO
-			printderp(message);
+			log(message, Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 			if (p != null) {
 				p.destroyForcibly();
 			}
@@ -1255,7 +1167,7 @@ public class UpdaterService extends AbstractSimpleService {
 					monitoringProperties.setProperty(NAMESPACE_UPDATERSERVICE_GENERAL, KEY_UPDATE_ABORTED, "1");
 				}
 			} catch (IOException e) {
-				printderp("Could not tell current PalComStarter that update was aborted.");
+				log("Could not tell current PalComStarter that update was aborted.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 			}
 			// Start current PalComStarter
 			ProcessBuilder pb = new ProcessBuilder(currentPalComStarterCommand.split(" "));
@@ -1264,7 +1176,7 @@ public class UpdaterService extends AbstractSimpleService {
 				pb.start();
 			} catch (IOException e1) {
 				e1.printStackTrace();
-				printderp("MAJOR ERROR! Could not start current PalcomStarter. Hoping that the OS will start it later via the startup script...");
+				log("MAJOR ERROR! Could not start current PalcomStarter. Hoping that the OS will start it later via the startup script...", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				System.exit(0);
 			}
 			stopDevice();
@@ -1277,11 +1189,8 @@ public class UpdaterService extends AbstractSimpleService {
 	
 	private class UpdateStageThreeThread extends Thread {
 		private String currentPalcomStarterCommand;
-//		private String currentPathToFS;
 		private Writable writableConnToUpdateServer;
 		private String deviceID;
-//		private String basePath;
-//		private String newVersion;
 		private String startupScriptURL;
 		private String newStartupCommand;
 		private File startupScriptBackup;
@@ -1290,10 +1199,10 @@ public class UpdaterService extends AbstractSimpleService {
 
 		@Override
 		public void run() {
-			printderp("UpdateStageThree Thread started.");
+			log("UpdateStageThree Thread started.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			// Setting some variables needed later in the process and in case of emergency abort			
 			if (!stageThreePreparations()) {
-				printderp("Will not be able to perform stage three. Aborting update!");
+				log("Will not be able to perform stage three. Aborting update!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				
 				return;
 			}
@@ -1313,8 +1222,8 @@ public class UpdaterService extends AbstractSimpleService {
 			socketSender.sendMsg(UPDATE_PROTOCOL_CHECK_SOCKET_CONFIRM, SocketSender.TRY_FOREVER);
 			socketListener.waitForMsg(UPDATE_PROTOCOL_CHECK_UPDATE_SERVER, SocketListenerThread.WAIT_FOREVER);
 			if(updateServerDeviceID == null) { // updateServerDeviceID is set in UpdaterService's constructor
-				printderp("Could not find UpdateServer's deviceID in monitoring.properties: " + NAMESPACE_UPDATERSERVICE_GENERAL + "@" + KEY_UPDATE_SERVER_DEVICE_ID);
-				printderp("Exiting.");
+				log("Could not find UpdateServer's deviceID in monitoring.properties: " + NAMESPACE_UPDATERSERVICE_GENERAL + "@" + KEY_UPDATE_SERVER_DEVICE_ID, Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
+				log("Exiting.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				stopDevice();
 			}
 			
@@ -1323,13 +1232,13 @@ public class UpdaterService extends AbstractSimpleService {
 			
 			// request response from update server in order to test Palcom tunnel/communication
 			Command confirmRequestCmd = getProtocolHandler().findCommand(COMMAND_OUT_CHECK_UPDATE_SERVER);
-			printderp("Sending confirmmation request to update server");
+			log("Sending confirmmation request to update server", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			sendTo(writableConnToUpdateServer, confirmRequestCmd);
 			
-			printderp("Waiting for confirmation from update server.");
+			log("Waiting for confirmation from update server.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			getCommandFromBuffer(COMMAND_IN_CHECK_UPDATE_SERVER_CONFIRM);
 
-			printderp("Got response from update server!");
+			log("Got response from update server!", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			socketSender.sendMsg(UPDATE_PROTOCOL_CHECK_UPDATE_SERVER_CONFIRM, SocketSender.TRY_FOREVER);
 			
 			newVersion = socketListener.getMsg();
@@ -1338,36 +1247,30 @@ public class UpdaterService extends AbstractSimpleService {
 			try {
 				startupScriptURL = HostFileSystems.getGlobalRoot().getFile("startupscript").getNativeURL().replace("file:", "");
 			} catch (IOException e) {
-				printderp("Could not get startupScript URL.");
+				log("Could not get startupScript URL.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			}
 			startupScript = new File(startupScriptURL);
 			if (!startupScript.isFile()) {
-				printderp("StartupScript is not a file.");
+				log("StartupScript is not a file.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			}
 			if (!startupScript.canRead()) {
-				printderp("StartupScript is not readable.");
+				log("StartupScript is not readable.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			}
 			if (!startupScript.canWrite()) {
-				printderp("StartupScript is not writable.");
+				log("StartupScript is not writable.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			}
 			
 			// Prepare new startup script content
-			String pathToFS;
-			try {
-				pathToFS = HostFileSystems.getGlobalRoot().getURL().replace("/PalcomFilesystem/global", "").replace("file:", "");
-			} catch (IOException e) {
-				printderp("Could not get path to PalcomFilesystem.");
-				return false;
-			}
+			String pathToFS = HostFileSystems.getUnixStylePathToFilesystemRoot().replace("/PalcomFilesystem", "");
 			String pathToExec;
 			try {
 				pathToExec = DeviceList.getConfFolder(PALCOMSTARTER_DEVICE_TYPE).getNativeURL().replace("file:", "");
 			} catch (IOException e) {
-				printderp("Could not get path to executable.");
+				log("Could not get path to executable.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			}
 			pathToExec += PALCOMSTARTER_DEVICE_TYPE + "-" + newVersion + ".jar";
@@ -1380,7 +1283,7 @@ public class UpdaterService extends AbstractSimpleService {
 			try {
 				Files.copy(startupScript.toPath(), startupScriptBackup.toPath());
 			} catch (IOException e1) {
-				printderp("Could not create backup of startup script file.");
+				log("Could not create backup of startup script file.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			}
 			
@@ -1394,7 +1297,7 @@ public class UpdaterService extends AbstractSimpleService {
 		
 		private void stageThree() {
 			// Now we are in charge of the update process
-			printderp("Updating host's startup script");
+			log("Updating host's startup script", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			
 			// Write new content to startup script
 			FileWriter fw = null;
@@ -1415,7 +1318,7 @@ public class UpdaterService extends AbstractSimpleService {
 				// Restore startupScript backup
 				startupScript.delete();
 				if (!startupScriptBackup.renameTo(startupScript)) {							
-					printderp("MAJOR ERROR! Could not restore startupScript backup!");
+					log("MAJOR ERROR! Could not restore startupScript backup!", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				}
 				abortUpdateStageThree("Error while updating startup script. Aborting update!");
 			}
@@ -1430,11 +1333,11 @@ public class UpdaterService extends AbstractSimpleService {
 			
 			monitoringProperties.setProperty(NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION, PALCOMSTARTER_DEVICE_TYPE, newVersion);
 			sendTo(writableConnToUpdateServer, getProtocolHandler().findCommand(COMMAND_OUT_BENCHMARK_END)); // benchmark
-			printderp("Updating done");
+			log("Updating done", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 		}
 		
 		public void abortUpdateStageThree(String message) {
-			printderp(message);
+			log(message, Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 			// Set updateAborted variable so current PalComStarter knows that update failed
 			String tmp = monitoringProperties.getProperty(NAMESPACE_UPDATERSERVICE_GENERAL, KEY_UPDATE_ABORTED);
 			if (tmp != null) {
@@ -1451,7 +1354,7 @@ public class UpdaterService extends AbstractSimpleService {
 				pb.start();
 			} catch (IOException e1) {
 				e1.printStackTrace();
-				printderp("MAJOR ERROR! Could not start current PalcomStarter. Hoping that the OS will start it later via the startup script...");
+				log("MAJOR ERROR! Could not start current PalcomStarter. Hoping that the OS will start it later via the startup script...", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				System.exit(0);
 			}
 			// TODO Tell JVM to delete new filesystem when it shuts down
@@ -1543,11 +1446,11 @@ public class UpdaterService extends AbstractSimpleService {
 			typeToVersionMap.put(typeOfDevice, monitoredDeviceVersion);
 			MonitoredDevice monitoredDevice = new MonitoredDevice(dID, typeOfDevice, palcomDevice);
 			monitoredDevices.add(monitoredDevice);
-			printderp("Adding device to monitor:");
-			printderp("Name: " + instanceName);
-			printderp("ID: " + deviceID);
-			printderp("Device type: " + typeOfDevice);
-			printderp("");
+			log("Adding device to monitor:", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
+			log("Name: " + instanceName, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
+			log("ID: " + deviceID, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
+			log("Device type: " + typeOfDevice, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
+			log("", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		}
 
 		/**
@@ -1555,13 +1458,13 @@ public class UpdaterService extends AbstractSimpleService {
 		 */
 		public void disable() {
 			if (monitoringEnabled) {
-				printderp("Disabling monitoring.");
+				log("Disabling monitoring.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				disableMonitorLock.acquireUninterruptibly();
 				// wait for the monitoring thread to finish what it is doing
 				if(!doingStuffLock.tryAcquire()){
-					printderp("Waiting for monitoring thread to finish what it is doing...");
+					log("Waiting for monitoring thread to finish what it is doing...", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					doingStuffLock.acquireUninterruptibly();
-					printderp("Monitoring thread has finished doing its stuff. Monitoring is now disabled.");
+					log("Monitoring thread has finished doing its stuff. Monitoring is now disabled.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				}
 				doingStuffLock.release();		
 				monitoringEnabled = false;
@@ -1570,7 +1473,7 @@ public class UpdaterService extends AbstractSimpleService {
 		
 		public void enable() {
 			if (!monitoringEnabled) {
-				printderp("Enabling monitoring.");
+				log("Enabling monitoring.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				disableMonitorLock.release();
 				monitoringEnabled = true;
 			}
@@ -1593,19 +1496,19 @@ public class UpdaterService extends AbstractSimpleService {
 		
 		private boolean sendCommandToMonitoredDevice(MonitoredDevice monitoredDevice, Command cmd) {
 			if (monitoredDevice.conn == null){
-				printderp("No connection registered to device " + monitoredDevice.deviceID);
+				log("No connection registered to device " + monitoredDevice.deviceID, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				return false;
 			}
 			int status = sendTo(monitoredDevice.conn, cmd);
 			switch (status) {
 			case SEND_BUFFER_FULL:
-				printderp("Send buffer full");
+				log("Send buffer full.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				return false;
 			case SEND_ERROR:
-				printderp("Send error");
+				log("Send error.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				return false;
 			case SEND_OK:
-				printderp("Successfully sent command " + cmd.getID() + " to " + monitoredDevice.deviceID);
+				log("Successfully sent command " + cmd.getID() + " to " + monitoredDevice.deviceID, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				return true;
 			default:
 				break;
@@ -1617,18 +1520,18 @@ public class UpdaterService extends AbstractSimpleService {
 			if (startGentle) {
 				Command killCmd = getProtocolHandler().findCommand(COMMAND_OUT_KILL);
 				if(!sendCommandToMonitoredDevice(monitoredDevice, killCmd)) {
-					printderp("Could not send " + killCmd.getID() + " to " + monitoredDevice.deviceID);
+					log("Could not send " + killCmd.getID() + " to " + monitoredDevice.deviceID, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				}
 			}
 			if(monitoredDevice.p != null) {
-				printderp("Trying to kill monitored device forcibly...");
+				log("Trying to kill monitored device forcibly...", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				monitoredDevice.p.destroyForcibly();
 				try {
 					monitoredDevice.p.waitFor();
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-				printderp("Device killed.");
+				log("Device killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				monitoredDevice.p = null;
 			}
 		}
@@ -1664,17 +1567,12 @@ public class UpdaterService extends AbstractSimpleService {
 		}
 		
 		public boolean startMonitoredDeviceHelper(MonitoredDevice monitoredDevice, String pathToJar) {
-			String pathToFS;
-			try {
-				pathToFS = HostFileSystems.getGlobalRoot().getURL().replace("/PalcomFilesystem/global", "").replace("file:", "");
-			} catch (IOException e1) {
-				return false;
-			}
+			String pathToFS = HostFileSystems.getUnixStylePathToFilesystemRoot().replace("/PalcomFilesystem", "");
 			String[] arguments = {"java", "-jar", pathToJar, "-x", monitoredDevice.deviceID.getID(), "-f", pathToFS};
 			String msg = "Starting monitored device with:";
 			for(String s: arguments)
 				msg += " " + s;
-			printderp(msg);
+			log(msg, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			ProcessBuilder pb = new ProcessBuilder(arguments);
 			pb.inheritIO();
 			try {
@@ -1718,7 +1616,7 @@ public class UpdaterService extends AbstractSimpleService {
 			killMonitoredDevice(d, false);
 			
 			if (!startMonitoredDevice(d)) {
-				printderp("Could not start monitored device: " + d.deviceID + ". Will try again in " + RECENTLY_STARTED_WAIT_SEC + "s.");
+				log("Could not start monitored device: " + d.deviceID + ". Will try again in " + RECENTLY_STARTED_WAIT_SEC + "s.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				killMonitoredDevice(d, false);
 				if (!checkList.contains(d)) {
 					checkList.add(d);
@@ -1732,7 +1630,7 @@ public class UpdaterService extends AbstractSimpleService {
 				return;
 			}
 			if(!performMonitoredDeviceStartupCheck(d)) {
-				printderp("Monitored device " + d.deviceID + " failed startup check. Will try again in " + RECENTLY_STARTED_WAIT_SEC + "s.");
+				log("Monitored device " + d.deviceID + " failed startup check. Will try again in " + RECENTLY_STARTED_WAIT_SEC + "s.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				if (!checkList.contains(d)) {
 					checkList.add(d);
 					timer.schedule(new TimerTask() {
@@ -1744,17 +1642,17 @@ public class UpdaterService extends AbstractSimpleService {
 				}
 				return;
 			} else {
-				printderp("Child started and startup check finished.");
+				log("Child started and startup check finished.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			}
 		}
 		
 		private void checkMonitoredDevice(MonitoredDevice d) {
 			PalcomDevice pd = d.palcomDevice;
 			if(!pd.isReady()) {
-				printderp("Could not find " + d.deviceID.getID() + " on network.");
+				log("Could not find " + d.deviceID.getID() + " on network.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				long timeDiff = d.recentlyStartedDelay - System.currentTimeMillis();
 				if (timeDiff > 0) {
-					printderp("Recently started " + d.deviceID.getID() + ". Waiting " + timeDiff + "ms before trying to start it again.");
+					log("Recently started " + d.deviceID.getID() + ". Waiting " + timeDiff + "ms before trying to start it again.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 					// Schedule the check if it is not already scheduled
 					if (!checkList.contains(d)) {
 						checkList.add(d);
@@ -1766,11 +1664,11 @@ public class UpdaterService extends AbstractSimpleService {
 						}, RECENTLY_STARTED_WAIT_SEC*1000);					
 					}
 				} else {
-					printderp("It will be restarted.");
+					log("It will be restarted.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 					restartMonitoredDevice(d);					
 				}
 			} else {
-				printderp("Device " + pd.getDeviceID().getID() + " is up and running. It does not need to be restarted.");
+				log("Device " + pd.getDeviceID().getID() + " is up and running. It does not need to be restarted.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			}
 		}
 		
@@ -1782,32 +1680,32 @@ public class UpdaterService extends AbstractSimpleService {
 		
 		private boolean performMonitoredDeviceStartupCheck(MonitoredDevice d) {
 			if (!socketSender.sendMsg(UPDATE_PROTOCOL_CHECK_SOCKET, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-				printderp("Send msg timeout: Could not send msg to monitored device. Shutting down device again.");
+				log("Send msg timeout: Could not send msg to monitored device. Shutting down device again.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				killMonitoredDevice(d, false);
 				return false;
 			}
 			if (socketListener.waitForMsg(UPDATE_PROTOCOL_CHECK_SOCKET_CONFIRM, MAX_SECONDS_WAIT_FOR_DEVICE) == null) {
-				printderp("Wait for msg timeout: No socket response from monitored device. Shutting down device again.");
+				log("Wait for msg timeout: No socket response from monitored device. Shutting down device again.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				killMonitoredDevice(d, false);
 				return false;
 			}
 			if (!socketSender.sendMsg(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK, MAX_SECONDS_WAIT_FOR_DEVICE)) {
-				printderp("Send msg timeout: Could not send msg to monitored device. Shutting down device again.");
+				log("Send msg timeout: Could not send msg to monitored device. Shutting down device again.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				killMonitoredDevice(d, false);
 				return false;
 			}
 			if (socketListener.waitForMsg(UPDATE_PROTOCOL_FINISH_DEVICE_STARTUP_CHECK_ACK, MAX_SECONDS_WAIT_FOR_DEVICE) == null) {
-				printderp("Wait for msg timeout: No socket response from monitored device. Shutting down device again.");
+				log("Wait for msg timeout: No socket response from monitored device. Shutting down device again.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 				killMonitoredDevice(d, false);
 				return false;
 			}
-			printderp("Startup check finished.");
+			log("Startup check finished.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			return true;
 		}
 
 		@Override
 		public void run() {
-			printderp("Monitoring Thread started. Doing startup check.");
+			log("Monitoring Thread started. Doing startup check.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			doingStuffLock.acquireUninterruptibly();
 			checkAllMonitoredDevices();
 			doingStuffLock.release();
@@ -1816,13 +1714,13 @@ public class UpdaterService extends AbstractSimpleService {
 					checkListSemaphore.acquire(); // wait for something to check in the checklist
 				} catch (InterruptedException e1) {/* do nothing */}
 				if(!disableMonitorLock.tryAcquire()){ // there is something to check, but monitoring may be disabled
-					printderp("Monitoring is temporarily disabled.");
+					log("Monitoring is temporarily disabled.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 					disableMonitorLock.acquireUninterruptibly();
-					printderp("Monitoring is enabled.");
+					log("Monitoring is enabled.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				}
 				disableMonitorLock.release();
 				if(halt) {
-					printderp("Monitoring Thread stopped.");
+					log("Monitoring Thread stopped.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					return;
 				}
 				doingStuffLock.acquireUninterruptibly();
@@ -1838,7 +1736,7 @@ public class UpdaterService extends AbstractSimpleService {
 		public void unavailable(Resource resource) {
 			if (resource instanceof DeviceProxy) {
 				DeviceProxy dp = (DeviceProxy) resource;
-				printderp("Unvailable: " + dp.getDeviceID().getID());
+				log("Unvailable: " + dp.getDeviceID().getID(), Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				for (MonitoredDevice md: monitoredDevices) {
 					if (dp.getDeviceID().getID().equals(md.deviceID.getID())) {
 						md.conn = null;
@@ -1850,7 +1748,7 @@ public class UpdaterService extends AbstractSimpleService {
 					}
 				}
 			} else {
-				printderp("Unavailable: " + resource.toString());				
+				log("Unavailable: " + resource.toString(), Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);				
 			}
 		}
 
@@ -1858,7 +1756,7 @@ public class UpdaterService extends AbstractSimpleService {
 		public void available(Resource resource) {
 			if (resource instanceof DeviceProxy) {
 				DeviceProxy dp = (DeviceProxy) resource;
-				printderp("Available: " + dp.getDeviceID().getID());
+				log("Available: " + dp.getDeviceID().getID(), Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				for (MonitoredDevice md: monitoredDevices) {
 					if (dp.getDeviceID().getID().equals(md.deviceID.getID())) {
 						md.conn = getWritableConnectionToService(md.deviceID, UpdaterService.SERVICE_NAME, MAX_SECONDS_WAIT_FOR_DEVICE);
@@ -1866,7 +1764,7 @@ public class UpdaterService extends AbstractSimpleService {
 					}
 				}
 			} else {
-				printderp("Available: " + resource.toString());				
+				log("Available: " + resource.toString(), Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);				
 			}
 		}
 		@Override
@@ -1874,8 +1772,7 @@ public class UpdaterService extends AbstractSimpleService {
 	}
 	
 	/**
-	 * Keeps track of the connection to the update server if it goes down and goes up again.
-	 * @author splushii
+	 * Keeps track of the connection to the UpdateServer.
 	 *
 	 */
 	private class UpdateServerConnectionListener implements ResourceListener {
@@ -1886,7 +1783,7 @@ public class UpdaterService extends AbstractSimpleService {
 		
 		public UpdateServerConnectionListener() {
 			if (updateServerDeviceID == null) {
-				printderp("No Device ID to UpdateServer in configuration: " + NAMESPACE_UPDATERSERVICE_GENERAL + "@" + KEY_UPDATE_SERVER_DEVICE_ID);
+				log("No Device ID to UpdateServer in configuration: " + NAMESPACE_UPDATERSERVICE_GENERAL + "@" + KEY_UPDATE_SERVER_DEVICE_ID, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				return;
 			}
 			updateServerDID = new DeviceID(updateServerDeviceID);
@@ -1906,7 +1803,7 @@ public class UpdaterService extends AbstractSimpleService {
 			if (writableConnToUpdateServer == null) {
 				writableConnToUpdateServer = getWritableConnectionToService(updateServerDID, UpdateDistributionService.SERVICE_NAME, MAX_SECONDS_WAIT_FOR_CONNECTION);
 				if (writableConnToUpdateServer == null) {
-					printderp("Could not establish connection to UpdateServer. Will not be able to receive updates.");
+					log("Could not establish connection to UpdateServer. Will not be able to receive updates.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 					return false;
 				}
 			}
@@ -1915,16 +1812,16 @@ public class UpdaterService extends AbstractSimpleService {
 				// The connection is closed so we need to establish a new one.
 				writableConnToUpdateServer = getWritableConnectionToService(updateServerDID, UpdateDistributionService.SERVICE_NAME, MAX_SECONDS_WAIT_FOR_CONNECTION);
 				if (writableConnToUpdateServer == null) {
-					printderp("Could not establish connection to UpdateServer. Will not be able to receive updates.");
+					log("Could not establish connection to UpdateServer. Will not be able to receive updates.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 					return false;
 				}
 			}
-			printderp("Writable connection established to UpdateServer. We will now be able to receive updates.");
+			log("Writable connection established to UpdateServer. We will now be able to receive updates.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 			return true;
 		}
 		
 		public void checkLatestVersion() {
-			printderp("Checking latest version.");
+			log("Checking latest version.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 			if (checkUpdateServer()) {
 				Command cmd = getProtocolHandler().findCommand(COMMAND_OUT_CHECK_LATEST_VERSION); 
 				String deviceTypes = PALCOMSTARTER_DEVICE_TYPE;
@@ -1938,14 +1835,13 @@ public class UpdaterService extends AbstractSimpleService {
 
 		@Override
 		public void available(Resource resource) {
-			printderp("UpdateServer available again!");	
+			log("UpdateServer available again!", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);	
 			checkLatestVersion();
 		}
 
 		@Override
 		public void unavailable(Resource resource) {
-			printderp("UpdateServer unavailable :(");
-//			writableConnToUpdateServer = null;
+			log("UpdateServer unavailable :(", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		}
 
 		@Override
@@ -1965,7 +1861,6 @@ public class UpdaterService extends AbstractSimpleService {
 		PalcomDevice pd = container.getDiscoveryManager().getDevice(deviceID);
 		long timeToStop = System.currentTimeMillis() + maxSecondsToWait*1000;
 		while (!pd.isReady()) {
-//			printderp("UpdateServer device not ready. Trying again in " + timeBetweenReadyChecks + "ms." );
 			if (maxSecondsToWait != -1 && System.currentTimeMillis() > timeToStop) {
 				return null;
 			}
@@ -1975,14 +1870,14 @@ public class UpdaterService extends AbstractSimpleService {
 				return null;
 			}
 		}
-		printderp("Device with ID " + deviceID + " is ready.");
+		log("Device with ID " + deviceID + " is ready.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		PalcomServiceList psl = pd.getServiceList();
 		PalcomService ps = null;
 		try {
 			for (int i = 0; i < psl.getNumService(); ++i) {
 				ps = (PalcomService) psl.getService(i);
 				if(ps.getName().equals(serviceName)) {
-					printderp("Service with name " + serviceName + " found.");
+					log("Service with name " + serviceName + " found.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					break;
 				} else {
 					ps = null;
@@ -1990,11 +1885,10 @@ public class UpdaterService extends AbstractSimpleService {
 			}
 		} catch (ResourceException e) {/* handled below */}
 		if (ps == null) {
-			printderp("Did not find service with name " + serviceName + " on device with ID " + deviceID + ".");
+			log("Did not find service with name " + serviceName + " on device with ID " + deviceID + ".", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			return null;
 		}
 		while (!ps.isReady()) {
-//			printderp(serviceName + " is not ready. Trying again in " + timeBetweenReadyChecks + "ms." );
 			if (maxSecondsToWait != -1 && System.currentTimeMillis() > timeToStop) {
 				return null;
 			}
@@ -2008,14 +1902,14 @@ public class UpdaterService extends AbstractSimpleService {
 			Connection conn = ps.connectTo(getConnectionHandler(), getLocalAddress(), 5000, PalComVersion.DEFAULT_SERVICE_INTERACTION_PROTOCOL);
 			try {
 				conn.open();
-				printderp("Successfully connected to " + serviceName + " on " + deviceID);
+				log("Successfully connected to " + serviceName + " on " + deviceID, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				if (conn instanceof Writable) {
 					writableConn = (Writable) conn;
 				}
 			} catch (IllegalStateException e) {
-				printderp("Connection to " + serviceName + " is already open.");
+				log("Connection to " + serviceName + " is already open.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			} catch (NoSuchDeviceException e) {
-				printderp("Device " + deviceID + "cannot be found.");
+				log("Device " + deviceID + "cannot be found.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			} catch (IOException e) {
 				// Auto-generated catch block
 				e.printStackTrace();
@@ -2031,5 +1925,54 @@ public class UpdaterService extends AbstractSimpleService {
 			e.printStackTrace();
 		}
 		return writableConn;
+	}
+	
+	public void log(String msg, int component, int logLevel) {
+		// Uncommment this to use standard logging
+//		Logger.log(msg, component, logLevel);
+		
+		// Uncomment this to see color coded log messages.
+		boolean linuxColorCoding = true;
+		saneLog(msg, component, logLevel, linuxColorCoding, false);
+		
+		// Uncomment this and set log level to Logger.NONE in order to see what is happening when debugging.
+//		boolean linuxColorCoding = true;
+//		saneLog(msg, linuxColorCoding, true);
+	}
+	
+	private void saneLog(String msg, int component, int logLevel, boolean linuxColorCoding, boolean stripped) {
+		String red = "";
+		String green = "";
+		String resetColor = "";
+
+		// Using color coding for linux terminal
+		if (linuxColorCoding) {
+			red = "\033[31m";
+			green = "\033[32m";
+			resetColor = "\033[0m";
+		}
+		
+		String extraInfo;
+		DeviceProperties dp;
+		try {
+			dp = new DeviceProperties(new DeviceID("monitoring"), HostFileSystems.getGlobalRoot(), null, "Monitoring properties. Generated " + new Date());
+			if (isMonitor) {
+				extraInfo = red + container.getName() + "(" + dp.getProperty(NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION, PALCOMSTARTER_DEVICE_TYPE) + ")";
+			} else {
+				extraInfo = green + container.getName() + "(" + dp.getProperty(NAMESPACE_UPDATERSERVICE_DEVICE_TYPE_VERSION, "TheThing") + ")";
+			}
+		} catch (IOException e) {
+			if (isMonitor) {
+				extraInfo = red + container.getName();
+			} else {
+				extraInfo = green + container.getName();
+			}
+		}
+		String print = extraInfo + ": " + resetColor + msg;
+		if (stripped) {
+			System.err.println(print);			
+		} else {
+			Logger.log(print, component, logLevel);
+		}
 	}
 }

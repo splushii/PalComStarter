@@ -10,6 +10,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import se.lth.cs.palcom.logging.Logger;
+
 // +----------------------------------------------------------------------------------------------+
 // |                          SocketListener Thread                                               |
 // +----------------------------------------------------------------------------------------------+
@@ -81,7 +83,7 @@ public class SocketListenerThread extends Thread {
 		try {
 			msgBox.put(msg);
 		} catch (InterruptedException e) {
-			us.printderp("Got interrupted when trying to add msg \"" + msg + "\" to SocketListener's msgBox");
+			us.log("Got interrupted when trying to add msg \"" + msg + "\" to SocketListener's msgBox", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 			e.printStackTrace();
 		}
 	}
@@ -104,12 +106,12 @@ public class SocketListenerThread extends Thread {
 
 	@Override
 	public void run() {
-		us.printderp("SocketListener Thread started. Socket listening on port " + listeningPort);
+		us.log("SocketListener Thread started. Socket listening on port " + listeningPort, Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		try {
 			ss = new ServerSocket(listeningPort);
 		} catch (IOException e1) {
 			e1.printStackTrace();
-			us.printderp("SocketListener Thread killed.");
+			us.log("SocketListener Thread killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 			return;
 		}
 		Socket sock;
@@ -120,36 +122,36 @@ public class SocketListenerThread extends Thread {
 				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
 				String line = null;
 				while ((line = in.readLine()) != null) {
-					us.printderp("Socket message received \"" + line + "\"");
+					us.log("Socket message received \"" + line + "\"", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					addMsg(line);
 				}
 			} catch (SocketException e) {
 				if (halt) {
-					us.printderp("SocketListener Thread killed.");
+					us.log("SocketListener Thread killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					return;
 				}
-				us.printderp("SocketException (" + e.getMessage() + ") in SocketListener. Waiting until awoken.");
+				us.log("SocketException (" + e.getMessage() + ") in SocketListener. Waiting until awoken.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 				try {
 					ss.close();
 				} catch (IOException e2) {
-					us.printderp("Could not close socket in SocketListener.");
+					us.log("Could not close socket in SocketListener.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				}
 				wakeLock.acquireUninterruptibly();
 				if (halt) {
-					us.printderp("SocketListener Thread killed.");
+					us.log("SocketListener Thread killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 					return;
 				}
 				try {
 					ss = new ServerSocket(listeningPort);
 				} catch (IOException e2) {
 					e2.printStackTrace();
-					us.printderp("Could not open SocketListener again. Returning");
+					us.log("Could not open SocketListener again. Returning", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 					break;
 				}
 			} catch (IOException e) {
 				e.printStackTrace();					
 			}
 		}
-		us.printderp("SocketListener Thread killed.");
+		us.log("SocketListener Thread killed.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 	}
 }

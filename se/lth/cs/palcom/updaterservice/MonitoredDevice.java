@@ -14,7 +14,6 @@ import se.lth.cs.palcom.discovery.proxy.PalcomDevice;
  */
 public class MonitoredDevice {
 	DeviceID deviceID;
-//	String pathToJar;
 	String deviceType;
 	PalcomDevice palcomDevice;
 	Writable conn;
@@ -22,7 +21,6 @@ public class MonitoredDevice {
 	long recentlyStartedDelay = 0;
 	public MonitoredDevice(DeviceID deviceID, String typeOfDevice, PalcomDevice palcomDevice) {
 		this.deviceID = deviceID;
-//		this.pathToJar = pathToJar;
 		this.deviceType = typeOfDevice;
 		this.palcomDevice = palcomDevice;
 	}
