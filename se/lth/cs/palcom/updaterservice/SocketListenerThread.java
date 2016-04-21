@@ -16,13 +16,13 @@ import se.lth.cs.palcom.logging.Logger;
 // |                          SocketListener Thread                                               |
 // +----------------------------------------------------------------------------------------------+
 /**
- * A thread class used to receive and buffer Update Protocols commands over TCP sockets.
+ * A helper class running as a thread used to receive and buffer Update Protocols commands over TCP.
  * Ugly, but does its job.
- * @author splushii
+ * @author Christian Hernvall
  *
  */
-public class SocketListenerThread extends Thread {
-	public static final int WAIT_FOREVER = -1;
+class SocketListenerThread extends Thread {
+	static final int WAIT_FOREVER = -1;
 	private int listeningPort;
 	private LinkedBlockingQueue<String> msgBox;
 	private ServerSocket ss;
@@ -30,13 +30,13 @@ public class SocketListenerThread extends Thread {
 	private boolean halt = false;
 	private UpdaterService us;
 	
-	public SocketListenerThread(UpdaterService us, int port) {
+	SocketListenerThread(UpdaterService us, int port) {
 		this.listeningPort = port;
 		this.us = us;
 		msgBox = new LinkedBlockingQueue<String>();
 	}
 	
-	public void stopThread() {
+	void stopThread() {
 		if (!halt) {
 			halt = true;
 			if(ss.isClosed()) {
@@ -47,7 +47,7 @@ public class SocketListenerThread extends Thread {
 		}
 	}
 	
-	public String getMsg() {
+	String getMsg() {
 		try {
 			return msgBox.take();
 		} catch (InterruptedException e) {
@@ -56,7 +56,7 @@ public class SocketListenerThread extends Thread {
 		}
 	}
 	
-	public String waitForMsg(String msgID, int waitInSeconds) {
+	String waitForMsg(String msgID, int waitInSeconds) {
 		String msg = null;
 		long stopTimeMillis = System.currentTimeMillis() + waitInSeconds*1000;
 		while(true) {
@@ -88,7 +88,7 @@ public class SocketListenerThread extends Thread {
 		}
 	}
 	
-	public void closeSocket() {
+	void closeSocket() {
 		try {
 			ss.close();
 		} catch (IOException e) {
@@ -96,11 +96,11 @@ public class SocketListenerThread extends Thread {
 		}
 	}
 	
-	public boolean isSocketClosed() {
+	boolean isSocketClosed() {
 		return ss.isClosed();
 	}
 	
-	public void reopenSocket() {
+	void reopenSocket() {
 		wakeLock.release();
 	}
 

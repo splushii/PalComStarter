@@ -9,13 +9,19 @@ import java.net.UnknownHostException;
 
 import se.lth.cs.palcom.logging.Logger;
 
-public class SocketSender {
-	public static final int TRY_FOREVER = -1;
+/**
+ * A helper class used to send Update Protocol commands over TCP.
+ * @author Christian Hernvall
+ *
+ */
+
+class SocketSender {
+	static final int TRY_FOREVER = -1;
 	private int sendPort;
 	private Socket s;
 	private UpdaterService us;
 	private long defaultRetryDelayMillis = 100;
-	public SocketSender(UpdaterService us, int sendPort) {
+	SocketSender(UpdaterService us, int sendPort) {
 		this.sendPort = sendPort;
 		this.us = us;
 	}
@@ -24,7 +30,7 @@ public class SocketSender {
 	 * @param msg
 	 * @param waitInSeconds SocketSender.TRY_FOREVER (-1) to try forever
 	 */
-	public boolean sendMsg(String msg, int waitInSeconds) {
+	synchronized boolean sendMsg(String msg, int waitInSeconds) {
 		long stopTimeMillis = System.currentTimeMillis() + waitInSeconds*1000;
 		boolean connected = false;
 		while (!connected) {
