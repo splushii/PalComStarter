@@ -36,7 +36,7 @@ class UpdateStageOneThread extends Thread {
 	private boolean performPalComStarterUpdate;
 	private boolean performMajorUpdate;
 
-	public UpdateStageOneThread(UpdaterService us, MonitoringThread monitor, SocketListenerThread socketListener, SocketSender socketSender, Writable conn, String[] deviceTypes, String[] deviceTypeNewVersions) {
+	UpdateStageOneThread(UpdaterService us, MonitoringThread monitor, SocketListenerThread socketListener, SocketSender socketSender, Writable conn, String[] deviceTypes, String[] deviceTypeNewVersions) {
 		this.us = us;
 		this.monitor = monitor;
 		this.socketListener = socketListener;
@@ -169,7 +169,7 @@ class UpdateStageOneThread extends Thread {
 			us.log("All devices are ready for a protocol breaking update.", Logger.CMP_SERVICE, Logger.LEVEL_DEBUG);
 		} else {
 			us.log("All devices are not ready for a protocol breaking update.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
-			if (palComStarterUpdateDescription.isProtocolBreaking()) {
+			if (palComStarterUpdateDescription != null && palComStarterUpdateDescription.isProtocolBreaking()) {
 				us.log("Will not perform a protocol breaking update of PalComStarter.", Logger.CMP_SERVICE, Logger.LEVEL_INFO);
 				palComStarterUpdateDescription = null;
 				performPalComStarterUpdate = false;

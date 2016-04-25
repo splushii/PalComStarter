@@ -26,7 +26,7 @@ public class PalComStarter extends AbstractDevice {
 	public final static String DEVICE_TYPE = "PalComStarter";
 	public static final String COM_CONTINUE_UPDATE_STAGE_THREE = "-continue-update-stage-three";
 	
-	private static final int DEFAULT_LOG_LEVEL = Logger.LEVEL_INFO;
+	private static final int DEFAULT_LOG_LEVEL = Logger.LEVEL_FILTER_NONE;
 
 	public PalComStarter(DeviceItem deviceItem, String version, boolean continueUpdateStageThree) {
 		super(deviceItem.getID(), deviceItem.getName(), version);

@@ -57,14 +57,18 @@ class MonitoringThread extends Thread implements ResourceListener {
 		doingStuffLock = new Semaphore(1);
 		timer = new Timer();
 		checkList = new ConcurrentLinkedQueue<MonitoredDevice>();
-		typeToVersionMap = new HashMap<String,String>();
+		typeToVersionMap = new HashMap<String, String>();
+		typeToNewMajorVersionMap = new HashMap<String, Integer>();
 	}
 	
 
 	boolean readyForMajorUpdate() {
 		int referenceVersion = -1;
 		for (String deviceType: typeToVersionMap.keySet()) {
-			if (typeToNewMajorVersionMap.get(deviceType) != referenceVersion) {
+			Integer tmp = typeToNewMajorVersionMap.get(deviceType);
+			if (tmp == null) {
+				return false;
+			} else if (tmp != referenceVersion) {
 				if (referenceVersion == -1) { // This is the first major version to compare
 					referenceVersion = typeToNewMajorVersionMap.get(deviceType);
 				} else {
@@ -359,6 +363,9 @@ class MonitoringThread extends Thread implements ResourceListener {
 	}
 	
 	private boolean performMonitoredDeviceStartupCheck(MonitoredDevice d) {
+		if (socketSender == null) {
+			System.err.println("DERP IT IS NULL");
+		}
 		if (!socketSender.sendMsg(UpdaterService.UPDATE_PROTOCOL_CHECK_SOCKET, MAX_SECONDS_WAIT_FOR_DEVICE)) {
 			us.log("Send msg timeout: Could not send msg to monitored device. Shutting down device again.", Logger.CMP_SERVICE, Logger.LEVEL_ERROR);
 			killMonitoredDevice(d, false);

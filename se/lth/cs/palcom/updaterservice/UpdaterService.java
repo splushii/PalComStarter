@@ -161,6 +161,8 @@ public class UpdaterService extends AbstractSimpleService {
 			try {
 				monitoringProperties = new DeviceProperties(new DeviceID("monitoring"), HostFileSystems.getGlobalRoot(), null, "Monitoring properties. Generated " + new Date());
 				String[] monitoredDeviceNames = monitoringProperties.getKeys(NAMESPACE_UPDATERSERVICE_MONITORED_DEVICE_NAMES);
+				socketListener = new SocketListenerThread(this, PALCOMSTARTER_SOCKET_PORT);
+				socketSender = new SocketSender(this, MONITORED_DEVICE_SOCKET_PORT);
 				monitor = new MonitoringThread(this, socketListener, socketSender);
 				for (String deviceName: monitoredDeviceNames) {
 					if (!monitoringProperties.getProperty(NAMESPACE_UPDATERSERVICE_MONITORED_DEVICE_NAMES, deviceName).equals(PROPERTY_MONITORED_DEVICE_ENABLED)){
@@ -198,8 +200,6 @@ public class UpdaterService extends AbstractSimpleService {
 					log("UpdateServer device ID is not set in configuration: " + NAMESPACE_UPDATERSERVICE_GENERAL + "@" + KEY_UPDATE_SERVER_DEVICE_ID, Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 					log("Will not be able to communicate with or receive updates from Update Server.", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
 				}
-				socketListener = new SocketListenerThread(this, PALCOMSTARTER_SOCKET_PORT);
-				socketSender = new SocketSender(this, MONITORED_DEVICE_SOCKET_PORT);
 				updateServerConnectionListener = new UpdateServerConnectionListener(this, monitor);
 			} catch (IOException e) {
 				log("Could not access monitoring.properties. UpdateServer and monitored devices unknown. Reason: ", Logger.CMP_SERVICE, Logger.LEVEL_WARNING);
@@ -718,12 +718,12 @@ public class UpdaterService extends AbstractSimpleService {
 //		Logger.log(msg, component, logLevel);
 		
 		// Uncomment this to see color coded log messages.
-		boolean linuxColorCoding = true;
-		saneLog(msg, component, logLevel, linuxColorCoding, false);
+//		boolean linuxColorCoding = true;
+//		saneLog(msg, component, logLevel, linuxColorCoding, false);
 		
 		// Uncomment this and set log level to Logger.NONE in order to see what is happening when debugging.
-//		boolean linuxColorCoding = true;
-//		saneLog(msg, linuxColorCoding, true);
+		boolean linuxColorCoding = true;
+		saneLog(msg, component, logLevel, linuxColorCoding, true);
 	}
 	
 	private void saneLog(String msg, int component, int logLevel, boolean linuxColorCoding, boolean stripped) {
