@@ -13,6 +13,12 @@ import se.lth.cs.palcom.logging.Logger;
 import se.lth.cs.palcom.updatedistributionservice.UpdateDistributionService;
 import se.lth.cs.palcom.util.configuration.DeviceList;
 
+/**
+ * Thread performing update stage three, finishing update of PalComStarter and updating startup script. 
+ * Typically started by PalComStarter.
+ * @author Christian Hernvall
+ */
+
 class UpdateStageThreeThread extends Thread {
 	private UpdaterService us;
 	private SocketListenerThread socketListener;

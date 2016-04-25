@@ -74,6 +74,7 @@ public class UpdaterService extends AbstractSimpleService {
 
 	public static final String PARAM_VALUE_SEPARATOR = ",,,";
 	public static final String PARAM_NO_ENTRY = "no entry";
+	public static final String PARAM_IMPLEMENTATION = "implementation";
 	public static final String PARAM_VERSION = "version";
 	public static final String PARAM_DEVICE_TYPE = "device type";
 	public static final String PARAM_UPDATE_CONTENT = "jar content";
@@ -119,6 +120,7 @@ public class UpdaterService extends AbstractSimpleService {
 	enum UpdateState {
 		NONE, UPDATING_INITIAL, UPDATING_WAITING_FOR_JAR, UPDATING_KILLING_CURRENT, UPDATING_STARTING_NEW, UPDATING_FALLBACK_TIMER_CHECK_SOCKET, UPDATING_STAGE_TWO, STARTUP, UPDATING_FALLBACK_TIMER_CHECK_UPDATE_SERVER, UPDATING_SENDING_JAR, UPDATING_DONT_DISTURB, UPDATING_STAGE_THREE,
 	}
+
 	
 	private UpdateState updateState = UpdateState.NONE;
 

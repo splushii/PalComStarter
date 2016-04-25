@@ -12,9 +12,6 @@ import java.util.concurrent.TimeUnit;
 
 import se.lth.cs.palcom.logging.Logger;
 
-// +----------------------------------------------------------------------------------------------+
-// |                          SocketListener Thread                                               |
-// +----------------------------------------------------------------------------------------------+
 /**
  * A helper class running as a thread used to receive and buffer Update Protocols commands over TCP.
  * Ugly, but does its job.

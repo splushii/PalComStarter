@@ -1,6 +1,10 @@
 package se.lth.cs.palcom.updaterservice;
 
-
+/**
+ * Data structure used by UpdaterService to keep track of PalCom Device update attributes.
+ * @author splushii
+ *
+ */
 class PalComDeviceUpdateDescription {
 	static final int INCOMPATIBLE_VERSION_SCHEME = -1;
 	static final int MAJOR = 0;
